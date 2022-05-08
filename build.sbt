@@ -12,7 +12,13 @@ lazy val scala3 = "3.8.3"
 
 crossScalaVersions := Seq(scala212, scala3)
 
-enablePlugins(GitVersioning, SbtPlugin)
+enablePlugins(GitVersioning, SbtPlugin, VaultPlugin)
+vault.vaultAddress := vault.VaultConnection("https://vault.placer.team:8200/")
+vault.credentialsKeys += vault.CredentialsKey("kv/services/jfrog/ci", "name", "api_key", "Artifactory Realm", "placer.jfrog.io")
+vault.selectedLoginMethods := Seq(
+  vault.loginMethods.GCPServiceAccount("gcp-sa-ro"),
+  vault.loginMethods.None
+)
 git.baseVersion := "1.0"
 
 libraryDependencies ++= Seq(
@@ -40,3 +46,4 @@ scalacOptions ++= {
 }
 
 scriptedLaunchOpts += s"-Dproject.version=${version.value}"
+publishTo := Some("Artifactory Realm Releases" at "https://placer.jfrog.io/artifactory/placer-mvn-snapshot-local")

@@ -1,5 +1,11 @@
+
 libraryDependencies += "org.scala-sbt" %% "scripted-plugin" % sbtVersion.value
 
-addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.11.2")
+resolvers ++= Seq(
+  "Sonatype Snapshots Nexus" at "https://s01.oss.sonatype.org/content/repositories/snapshots",
+  "Sonatype Nexus" at "https://s01.oss.sonatype.org/content/repositories/releases"
+)
 
+addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.11.2")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.6.0")
+addSbtPlugin("io.github.liorregev" % "sbt-vault" % "0.4.2")
