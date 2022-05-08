@@ -10,7 +10,13 @@ scmInfo := Some(ScmInfo(url("https://github.com/sbt/sbt-git"), "scm:git:git@gith
 
 crossSbtVersions := List("1.3.13")
 
-enablePlugins(GitVersioning, SbtPlugin)
+enablePlugins(GitVersioning, SbtPlugin, VaultPlugin)
+vault.vaultAddress := vault.VaultConnection("https://vault.placer.team:8200/")
+vault.credentialsKeys += vault.CredentialsKey("kv/services/jfrog/ci", "name", "api_key", "Artifactory Realm", "placer.jfrog.io")
+vault.selectedLoginMethods := Seq(
+  vault.loginMethods.GCPServiceAccount("gcp-sa-ro"),
+  vault.loginMethods.None
+)
 git.baseVersion := "1.0"
 
 libraryDependencies ++= Seq(
@@ -20,3 +26,4 @@ libraryDependencies ++= Seq(
 )
 
 scriptedLaunchOpts += s"-Dproject.version=${version.value}"
+publishTo := Some("Artifactory Realm Releases" at "https://placer.jfrog.io/artifactory/placer-mvn-snapshot-local")
