@@ -6,13 +6,13 @@ import org.eclipse.jgit.api.Git as PGit
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
-
 import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.revwalk.{RevCommit, RevWalk}
 
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
+import scala.collection.JavaConverters.*
 
 // TODO - This class needs a bit more work, but at least it lets us use porcelain and wrap some higher-level
 // stuff on top of JGit, as needed for our plugin.
@@ -130,6 +130,24 @@ final class JGit(val repo: Repository) extends GitReadonlyInterface {
       format.setTimeZone(commit.getCommitterIdent.getTimeZone)
       format.format(new Date(millis))
     }
+  }
+
+  /** Files changed in current commit *   */
+  override def changedFiles: Seq[String] = {
+    val walk = new RevWalk(repo)
+    val maybeChanges = for {
+      head <- headCommit.map(walk.parseCommit)
+      parent <- Try(head.getParent(0)).toOption
+    } yield {
+      val os = new ByteArrayOutputStream()
+      val diffFormatter = new DiffFormatter(os)
+      diffFormatter.setRepository(repo)
+      diffFormatter.scan(parent, head)
+        .asScala
+        .flatMap(entry => Set(entry.getOldPath, entry.getNewPath))
+        .filterNot(_.startsWith("/"))
+    }
+    maybeChanges.getOrElse(Seq.empty)
   }
 }
 
