@@ -142,7 +142,7 @@ object SbtGit {
       for {
         headMessage <- gitHeadMessage.value.map(_.trim)
         mergedFrom <- gitMergeMessagePatterns.value
-          .map(_.r)
+          .map(_.r.unanchored)
           .flatMap { regex =>
             headMessage match {
               case regex(branch) => Option(branch)
