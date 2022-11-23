@@ -11,7 +11,7 @@ scmInfo := Some(ScmInfo(url("https://github.com/sbt/sbt-git"), "scm:git:git@gith
 crossSbtVersions := List("1.3.13")
 
 enablePlugins(GitVersioning, SbtPlugin, VaultPlugin)
-vault.vaultAddress := vault.VaultConnection("https://vault.placer.team:8200/")
+vault.vaultAddress := vault.VaultConnection("https://vault-prod.placer.team:8200/")
 vault.credentialsKeys += vault.CredentialsKey("kv/services/jfrog/ci", "name", "api_key", "Artifactory Realm", "placer.jfrog.io")
 vault.selectedLoginMethods := Seq(
   vault.loginMethods.GCPServiceAccount("gcp-sa-ro"),
@@ -21,6 +21,8 @@ git.baseVersion := "1.0"
 
 libraryDependencies ++= Seq(
   "org.eclipse.jgit" % "org.eclipse.jgit" % "5.13.0.202109080827-r",
+  "org.apache.logging.log4j" % "log4j-api" % "2.17.1",
+  "org.apache.logging.log4j" % "log4j-core" % "2.17.1",
   "com.michaelpollmeier" % "versionsort" % "1.0.11",
   "org.scalameta" %% "munit" % "0.7.29" % Test
 )
