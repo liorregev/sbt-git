@@ -13,7 +13,7 @@ lazy val scala3 = "3.8.3"
 crossScalaVersions := Seq(scala212, scala3)
 
 enablePlugins(GitVersioning, SbtPlugin, VaultPlugin)
-vault.vaultAddress := vault.VaultConnection("https://vault.placer.team:8200/")
+vault.vaultAddress := vault.VaultConnection("https://vault-prod.placer.team:8200/")
 vault.credentialsKeys += vault.CredentialsKey("kv/services/jfrog/ci", "name", "api_key", "Artifactory Realm", "placer.jfrog.io")
 vault.selectedLoginMethods := Seq(
   vault.loginMethods.GCPServiceAccount("gcp-sa-ro"),
@@ -24,7 +24,9 @@ git.baseVersion := "1.0"
 libraryDependencies ++= Seq(
   "org.eclipse.jgit" % "org.eclipse.jgit" % "5.13.5.202508271544-r",
   "com.michaelpollmeier" % "versionsort" % "1.0.17",
-  "org.scalameta" %% "munit" % "1.3.0" % Test
+  "org.apache.logging.log4j" % "log4j-api" % "2.17.1",
+  "org.apache.logging.log4j" % "log4j-core" % "2.17.1",
+  "org.scalameta" %% "munit" % "0.7.29" % Test
 )
 
 (pluginCrossBuild / sbtVersion) := {
