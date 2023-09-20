@@ -13,7 +13,7 @@ lazy val scala3 = "3.8.3"
 crossScalaVersions := Seq(scala212, scala3)
 
 enablePlugins(GitVersioning, SbtPlugin, VaultPlugin)
-vault.vaultAddress := vault.VaultConnection("https://vault-prod.placer.team:8200/")
+vault.vaultAddress := vault.VaultConnection("https://vault-prod.placer.team")
 vault.credentialsKeys += vault.CredentialsKey("kv/services/jfrog/ci", "name", "api_key", "Artifactory Realm", "placer.jfrog.io")
 vault.selectedLoginMethods := Seq(
   vault.loginMethods.GCPServiceAccount("gcp-sa-ro"),

@@ -3,10 +3,13 @@ package com.github.sbt.git
 import sbt.*
 import Keys.*
 
+import scala.util.matching.Regex
+
 /** This plugin has all the basic 'git' functionality for other plugins. */
+//noinspection ScalaUnusedSymbol
 object SbtGit {
 
-  object GitKeys {
+  private object GitKeys {
     // Read-only git settings and values for use in other build settings.
     // Note: These are all grabbed using jgit currently.
     val gitReader = SettingKey[ReadableGit]("git-reader", "This gives us a read-only view of the git repository.")
@@ -22,6 +25,14 @@ object SbtGit {
     val gitMergeMessagePatterns = settingKey[Seq[String]]("Collection of regex patterns with one sub-group to parse commit messages of merge commits")
     val gitMergeFrom = SettingKey[Option[String]]("git-merge-from", "Possible name of a branch HEAD is a merge from")
     val gitFilesChangedLastCommit = SettingKey[Seq[String]]("git-last-changes", "List of files changed in the last commit")
+    val versionRegex = settingKey[Regex]("Regex pattern for parsin versions, should have 3 subgroups for major, minor and patch")
+    val nextPatchVersion = taskKey[Option[String]]("Returns the next patch version")
+    val nextMinorVersion = taskKey[Option[String]]("Returns the next minor version")
+    val nextMajorVersion = taskKey[Option[String]]("Returns the next major version")
+//    val tagNextVersion = taskKey[String]("Tags the next version of the project")
+//    val createVersionTag = settingKey[Boolean]("Should SBT create version tags for this project, used when multiple projects share tags")
+//    val tagPrefix = settingKey[Option[String]]("Prefix for version tags in the project, used when multiple projects share tags")
+//    val locationOverride = settingKey[Option[String]]("Path to check for changed files in latest merge commit")
 
     // A Mechanism to run Git directly.
     @transient
@@ -55,7 +66,7 @@ object SbtGit {
     import complete.*
     import complete.DefaultParsers.*
 
-    val action: (State, Seq[String]) => State = { (state, args) =>
+    private val action: (State, Seq[String]) => State = { (state, args) =>
       val extracted = Project.extract(state)
       val (state2, runner) = extracted.runTask(GitKeys.gitRunner, state)
       val dir = extracted.get(baseDirectory)
@@ -69,13 +80,13 @@ object SbtGit {
       action(state, command +: args)
     }
 
-    val QuotedString: Parser[String] = DQuoteClass ~> any.+.string.filter(!_.contains(DQuoteClass), _ => "Invalid quoted string") <~ DQuoteClass
+    private val QuotedString: Parser[String] = DQuoteClass ~> any.+.string.filter(!_.contains(DQuoteClass), _ => "Invalid quoted string") <~ DQuoteClass
 
     // the parser providing auto-completion for git command
     // Note: This isn't an exact parser for git, it just tries to make it more convenient in sbt with a modicum of autocomplete.
     // Ideally we'd use the bash autocompletion scripts or zsh ones for full and complete information, but this actually
     // gives us a lot of bang for the buck.
-    def fullCommand(state: State) = {
+    private def fullCommand(state: State): Parser[(String, Seq[String])] = {
       val extracted = Project.extract(state)
       val reader = extracted.get(GitKeys.gitReader)
       implicit val branches: Seq[String] = reader.withGit(_.branches) ++ reader.withGit(_.remoteBranches) :+ "HEAD"
@@ -85,7 +96,7 @@ object SbtGit {
       token(Space) ~> token(NotQuoted, "<command>") ~ (Space ~> token(branch | QuotedString)).*
     }
 
-    def branch(implicit branches: Seq[String]): Parser[String] = NotQuoted.examples(branches.toSet)
+    private def branch(implicit branches: Seq[String]): Parser[String] = NotQuoted.examples(branches.toSet)
 
     private def isGitRepo(dir: File): Boolean = {
       if (System.getenv("GIT_DIR") != null) true
@@ -158,8 +169,8 @@ object SbtGit {
     val user = """(?:[^@\/]+@)?"""
     val domain = """([^\/]+)"""
     val gitPath = """(.*?)(?:\.git)?\/?$"""
-    val unauthenticated = raw"""(?:git|https?|ftps?)\:\/\/$domain\/$gitPath""".r
-    val ssh = raw"""ssh\:\/\/$user$domain\/$gitPath""".r
+    val unauthenticated = raw"""(?:git|https?|ftps?)://$domain/$gitPath""".r
+    val ssh = raw"""ssh://$user$domain/$gitPath""".r
     val headlessSSH = raw"""$user$domain:$gitPath""".r
 
     def buildScmInfo(domain: String, repo: String): Option[ScmInfo] = Option(
@@ -178,7 +189,7 @@ object SbtGit {
     }
   }
 
-  val projectSettings = Seq(
+  val projectSettings: Seq[Def.Setting[_]] = Seq(
     // Input task to run git commands directly.
     commands += GitCommand.command,
     gitTagToVersionNumber := git.defaultTagByVersionStrategy,
@@ -191,6 +202,31 @@ object SbtGit {
       if (projectPatterns == buildPatterns && projectTagToVersionNumber == buildTagToVersionNumber)
         (ThisBuild / gitDescribedVersion).value
       else gitReader.value.withGit(_.describedVersion(projectPatterns)).map(v => projectTagToVersionNumber(v).getOrElse(v))
+    }
+    versionRegex := raw"^(\d+)\.(\d+)\.(\d+)-\d+-g[a-f\d]+(-SNAPSHOT)?".r,
+    nextPatchVersion := {
+      val regex = git.versionRegex.value
+      version.value match {
+        case regex(major, minor, patch, _) =>
+          Option(s"$major.$minor.${patch.toInt + 1}")
+        case _ => None
+      }
+    },
+    nextMinorVersion := {
+      val regex = git.versionRegex.value
+      version.value match {
+        case regex(major, minor, _, _) =>
+          Option(s"$major.${minor.toInt + 1}.0")
+        case _ => None
+      }
+    },
+    nextMajorVersion := {
+      val regex = git.versionRegex.value
+      version.value match {
+        case regex(major, _, _, _) =>
+          Option(s"${major.toInt + 1}.0.0")
+        case _ => None
+      }
     }
   )
 
@@ -296,6 +332,13 @@ object SbtGit {
     val gitCurrentTags = ThisBuild / GitKeys.gitCurrentTags
     val gitCurrentBranch = ThisBuild / GitKeys.gitCurrentBranch
     val gitTagToVersionNumber = ThisProject / GitKeys.gitTagToVersionNumber
+    val versionRegex = ThisProject / GitKeys.versionRegex
+    val nextPatchVersion = ThisProject / GitKeys.nextPatchVersion
+    val nextMinorVersion = ThisProject / GitKeys.nextMinorVersion
+    val nextMajorVersion = ThisProject / GitKeys.nextMajorVersion
+//    val tagNextVersion = ThisProject / GitKeys.tagNextVersion
+//    val createVersionTag = ThisProject / GitKeys.createVersionTag
+//    val tagPrefix = ThisProject / GitKeys.tagPrefix
     val baseVersion = ThisBuild / GitKeys.baseVersion
     val versionProperty = ThisBuild / GitKeys.versionProperty
     val gitUncommittedChanges = ThisBuild / GitKeys.gitUncommittedChanges
@@ -344,7 +387,7 @@ object SbtGit {
       highestVersion.map(_ + suffix)
     }
 
-    def overrideVersion(versionProperty: String) = Option(sys.props(versionProperty))
+    def overrideVersion(versionProperty: String): Option[String] = Option(sys.props(versionProperty))
 
     def makeVersion(versionPossibilities: Seq[Option[String]]): Option[String] = {
       versionPossibilities.reduce(_ orElse _)
@@ -361,10 +404,11 @@ object SbtGit {
  * plugin directly.
  */
 object GitPlugin extends AutoPlugin {
-  override def requires = sbt.plugins.CorePlugin
+  override def requires: Plugins = sbt.plugins.CorePlugin
   override def trigger = allRequirements
   // Note: In an attempt to pretend we are binary compatible, we current add this as an after thought.
   // In 1.0, we should deprecate/move the other means of getting these values.
+  //noinspection ScalaUnusedSymbol
   object autoImport {
     val git = SbtGit.git
     def versionWithGit = SbtGit.versionWithGit
@@ -379,9 +423,9 @@ object GitPlugin extends AutoPlugin {
 
 /** Adapter to auto-enable git versioning.  i.e. the sbt 0.13.5+ mechanism of turning it on. */
 object GitVersioning extends AutoPlugin {
-  override def requires = sbt.plugins.IvyPlugin && GitPlugin
-  override def buildSettings = GitPlugin.autoImport.versionWithGit
-  override def projectSettings = GitPlugin.autoImport.versionProjectWithGit
+  override def requires: Plugins = sbt.plugins.IvyPlugin && GitPlugin
+  override def buildSettings: Seq[Def.Setting[_]] = GitPlugin.autoImport.versionWithGit
+  override def projectSettings: Seq[Def.Setting[_]] = GitPlugin.autoImport.versionProjectWithGit
 }
 /** Adapter to enable the git prompt. i.e. rich prompt based on git info. */
 object GitBranchPrompt extends AutoPlugin {
