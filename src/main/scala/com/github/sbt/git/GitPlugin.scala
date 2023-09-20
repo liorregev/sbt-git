@@ -29,10 +29,10 @@ object SbtGit {
     val nextPatchVersion = taskKey[Option[String]]("Returns the next patch version")
     val nextMinorVersion = taskKey[Option[String]]("Returns the next minor version")
     val nextMajorVersion = taskKey[Option[String]]("Returns the next major version")
-//    val tagNextVersion = taskKey[String]("Tags the next version of the project")
-//    val createVersionTag = settingKey[Boolean]("Should SBT create version tags for this project, used when multiple projects share tags")
-//    val tagPrefix = settingKey[Option[String]]("Prefix for version tags in the project, used when multiple projects share tags")
-//    val locationOverride = settingKey[Option[String]]("Path to check for changed files in latest merge commit")
+    val tagNextVersion = taskKey[String]("Tags the next version of the project")
+    val createVersionTag = settingKey[Boolean]("Should SBT create version tags for this project, used when multiple projects share tags")
+    val tagPrefix = settingKey[Option[String]]("Prefix for version tags in the project, used when multiple projects share tags")
+    val baseLocation = settingKey[String]("Path to check for changed files in latest merge commit")
 
     // A Mechanism to run Git directly.
     @transient
@@ -189,6 +189,10 @@ object SbtGit {
     }
   }
 
+  private lazy val fixRegex = raw"(hotfix|bugfix)/.*".r
+  private lazy val featureRegex = raw"feature/.*".r
+  private lazy val majorRegex = raw"major/.*".r
+
   val projectSettings: Seq[Def.Setting[_]] = Seq(
     // Input task to run git commands directly.
     commands += GitCommand.command,
@@ -227,7 +231,40 @@ object SbtGit {
           Option(s"${major.toInt + 1}.0.0")
         case _ => None
       }
-    }
+    },
+    tagPrefix := None,
+    createVersionTag := true,
+    baseLocation := {
+      val base = (ThisBuild / baseDirectory).value
+      val thisProject = baseDirectory.value
+      base.toPath.relativize(thisProject.toPath).toString
+    },
+    tagNextVersion := Def.taskDyn {
+      val runner = git.runner.value
+      val logger = streams.value.log
+      val changedFiles = git.gitFilesChangedLastCommit.value
+      val shouldCreateVersionTag = createVersionTag.value
+      Def.task {
+        val location = baseLocation.value
+        git.gitMergeFrom.value
+          .filter(_ => shouldCreateVersionTag)
+          .filter(_ => changedFiles.exists(_.startsWith(location)))
+          .flatMap {
+            case fixRegex(_) => nextPatchVersion.value
+            case featureRegex() => nextMinorVersion.value
+            case majorRegex() => nextMajorVersion.value
+            case _ => None
+          }
+          .map(newVersion => {
+            val tag = tagPrefix.value.map(prefix => s"$prefix-$newVersion").getOrElse(newVersion)
+            val projName = name.value
+            logger.info(s"New version for project $projName: $newVersion")
+            runner("tag", "-a", tag, "-m", s"$projName version $newVersion")(file("."), logger)
+            s"$projName = $newVersion"
+          })
+          .getOrElse("")
+      }
+    }.value
   )
 
   /** A Predefined setting to use JGit runner for git. */
@@ -336,9 +373,10 @@ object SbtGit {
     val nextPatchVersion = ThisProject / GitKeys.nextPatchVersion
     val nextMinorVersion = ThisProject / GitKeys.nextMinorVersion
     val nextMajorVersion = ThisProject / GitKeys.nextMajorVersion
-//    val tagNextVersion = ThisProject / GitKeys.tagNextVersion
-//    val createVersionTag = ThisProject / GitKeys.createVersionTag
-//    val tagPrefix = ThisProject / GitKeys.tagPrefix
+    val baseLocation = ThisProject / GitKeys.baseLocation
+    val tagNextVersion = ThisProject / GitKeys.tagNextVersion
+    val createVersionTag = ThisProject / GitKeys.createVersionTag
+    val tagPrefix = ThisProject / GitKeys.tagPrefix
     val baseVersion = ThisBuild / GitKeys.baseVersion
     val versionProperty = ThisBuild / GitKeys.versionProperty
     val gitUncommittedChanges = ThisBuild / GitKeys.gitUncommittedChanges
