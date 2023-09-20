@@ -1,0 +1,25 @@
+> git init
+> git config user.email "test@jsuereth.com"
+> git config user.name "Tester"
+$ copy-file changes/build.sbt build.sbt
+> git add build.sbt
+> git commit -m "test"
+> git tag v1.0.0
+> git checkout -b bugfix/branch
+> git add README.md
+> git commit -m "test2"
+> git checkout master
+> git merge --no-ff --no-edit bugfix/branch
+> reload
+> tagNextVersion
+> reload
+> checkNoTag
+> git checkout -b bugfix/branch2
+> git add mydir/README.md
+> git commit -m "test2"
+> git checkout master
+> git merge --no-ff --no-edit bugfix/branch2
+> reload
+> tagNextVersion
+> reload
+> checkTaggedFix
