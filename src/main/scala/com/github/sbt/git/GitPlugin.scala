@@ -31,7 +31,7 @@ object SbtGit {
     val tagNextVersion = taskKey[String]("Tags the next version of the project")
     val createVersionTag = settingKey[Boolean]("Should SBT create version tags for this project, used when multiple projects share tags")
     val tagPrefix = settingKey[Option[String]]("Prefix for version tags in the project, used when multiple projects share tags")
-    val baseLocation = settingKey[String]("Path to check for changed files in latest merge commit")
+    val baseLocation = settingKey[String]("Path to check for changed files in latest merge commit").withRank(KeyRanks.Invisible)
 
     // A Mechanism to run Git directly.
     val gitRunner = TaskKey[GitRunner]("git-runner", "The mechanism used to run git in the current build.")
@@ -131,9 +131,7 @@ object SbtGit {
     gitHeadCommit := gitReader.value.withGit(_.headCommitSha),
     gitHeadMessage := gitReader.value.withGit(_.headCommitMessage),
     gitHeadCommitDate := gitReader.value.withGit(_.headCommitDate),
-    gitTagToVersionNumber := git.defaultTagByVersionStrategy,
     gitDescribePatterns := Seq.empty[String],
-    gitDescribedVersion := gitReader.value.withGit(_.describedVersion(git.gitDescribePatterns.value)).map(v => git.gitTagToVersionNumber.value(v).getOrElse(v)),
     gitCurrentTags := gitReader.value.withGit(_.currentTags),
     gitCurrentBranch := Option(gitReader.value.withGit(_.branch)).getOrElse(""),
     ThisBuild / gitUncommittedChanges := gitReader.value.withGit(_.hasUncommittedChanges),
@@ -186,7 +184,7 @@ object SbtGit {
   val projectSettings: Seq[Def.Setting[_]] = Seq(
     // Input task to run git commands directly.
     commands += GitCommand.command,
-    gitTagToVersionNumber := git.defaultTagByVersionStrategy,
+    gitTagToVersionNumber := git.defaultTagByVersionStrategy(tagPrefix.value),
     gitDescribePatterns := tagPrefix.value.map(prefix => Seq(s"$prefix-*")).getOrElse(Seq.empty),
     gitDescribedVersion := gitReader.value.withGit(_.describedVersion((ThisProject / gitDescribePatterns).value)).map(v => git.gitTagToVersionNumber.value(v).getOrElse(v)),
     versionRegex := raw"^(\d+)\.(\d+)\.(\d+)-\d+-g[a-f\d]+(-SNAPSHOT)?".r,
@@ -226,25 +224,38 @@ object SbtGit {
       val logger = streams.value.log
       val changedFiles = git.gitFilesChangedLastCommit.value
       val shouldCreateVersionTag = createVersionTag.value
+      val projName = name.value
       Def.task {
         val location = git.baseLocation.value
-        git.gitMergeFrom.value
-          .filter(_ => shouldCreateVersionTag)
-          .filter(_ => changedFiles.exists(_.startsWith(location)))
-          .flatMap {
-            case fixRegex(_) => nextPatchVersion.value
-            case featureRegex() => nextMinorVersion.value
-            case majorRegex() => nextMajorVersion.value
-            case _ => None
+        if(shouldCreateVersionTag) {
+          logger.info(s"$projName / shouldCreateVersionTag = true")
+          if(changedFiles.exists(_.startsWith(location))) {
+            logger.info(s"Found changed files starting with $projName / location ($location)")
+            val mergeFrom = git.gitMergeFrom.value
+            mergeFrom
+              .flatMap {
+                case fixRegex(_) => nextPatchVersion.value
+                case featureRegex() => nextMinorVersion.value
+                case majorRegex() => nextMajorVersion.value
+                case _ =>
+                  logger.info(s"Merge from mismatch: $mergeFrom")
+                  None
+              }
+              .map(newVersion => {
+                val tag = tagPrefix.value.map(prefix => s"$prefix-$newVersion").getOrElse(newVersion)
+                logger.info(s"New version for project $projName: $newVersion")
+                runner("tag", "-a", tag, "-m", s"$projName version $newVersion")(file("."), logger)
+                s"$projName = $newVersion"
+              })
+              .getOrElse("")
+          } else {
+            logger.info(s"No changed files starting with $projName / location ($location)")
+            ""
           }
-          .map(newVersion => {
-            val tag = tagPrefix.value.map(prefix => s"$prefix-$newVersion").getOrElse(newVersion)
-            val projName = name.value
-            logger.info(s"New version for project $projName: $newVersion")
-            runner("tag", "-a", tag, "-m", s"$projName version $newVersion")(file("."), logger)
-            s"$projName = $newVersion"
-          })
-          .getOrElse("")
+        } else {
+          logger.info(s"$projName / shouldCreateVersionTag = false")
+          ""
+        }
       }
     }.value
   )
@@ -289,25 +300,6 @@ object SbtGit {
       ThisBuild / isSnapshot := {
         git.gitCurrentTags.value.isEmpty || git.gitUncommittedChanges.value
       },
-      ThisBuild / version := {
-        val overrideVersion =
-          git.overrideVersion(git.versionProperty.value)
-        val uncommittedSuffix =
-          git.makeUncommittedSignifierSuffix(git.gitUncommittedChanges.value, git.uncommittedSignifier.value)
-        val releaseVersion =
-          git.releaseVersion(git.gitCurrentTags.value, (ThisBuild / gitTagToVersionNumber).value, uncommittedSuffix)
-        val describedVersion =
-          git.flaggedOptional(git.useGitDescribe.value, git.describeVersion((ThisBuild / gitDescribedVersion).value, uncommittedSuffix))
-        val datedVersion = formattedDateVersion.value
-        val commitVersion = formattedShaVersion.value
-        //Now we fall through the potential version numbers...
-        git.makeVersion(Seq(
-          overrideVersion,
-          releaseVersion,
-          describedVersion,
-          commitVersion
-        )) getOrElse datedVersion // For when git isn't there at all.
-      }
     )
 
   def versionProjectWithGit: Seq[Setting[_]] =
@@ -367,9 +359,15 @@ object SbtGit {
     val formattedDateVersion = ThisBuild / GitKeys.formattedDateVersion
 
 
-    val defaultTagByVersionStrategy: String => Option[String] = { tag =>
-      if(tag matches "v[0-9].*") Some(tag drop 1)
-      else None
+    def defaultTagByVersionStrategy(prefix: Option[String]): String => Option[String] = { tag =>
+      prefix match {
+        case Some(value) =>
+          if (tag matches s"$value-[0-9].*") Some(tag.replace(s"$value-", ""))
+          else None
+        case None =>
+          if (tag matches "v[0-9].*") Some(tag drop 1)
+          else None
+      }
     }
 
     def defaultFormatShaVersion(baseVersion: Option[String], sha:String, suffix: String):String = {
