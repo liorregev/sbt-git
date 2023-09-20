@@ -32,7 +32,7 @@ object SbtGit {
     val tagNextVersion = taskKey[String]("Tags the next version of the project")
     val createVersionTag = settingKey[Boolean]("Should SBT create version tags for this project, used when multiple projects share tags")
     val tagPrefix = settingKey[Option[String]]("Prefix for version tags in the project, used when multiple projects share tags")
-    val baseLocation = settingKey[String]("Path to check for changed files in latest merge commit")
+    val baseLocation = settingKey[String]("Path to check for changed files in latest merge commit").withRank(KeyRanks.Invisible)
 
     // A Mechanism to run Git directly.
     @transient
@@ -139,7 +139,6 @@ object SbtGit {
     gitHeadCommit := gitReader.value.withGit(_.headCommitSha),
     gitHeadMessage := gitReader.value.withGit(_.headCommitMessage),
     gitHeadCommitDate := gitReader.value.withGit(_.headCommitDate),
-    gitTagToVersionNumber := git.defaultTagByVersionStrategy,
     gitDescribePatterns := Seq.empty[String],
     gitDescribedVersion := gitReader.value
       .withGit(_.describedVersion(git.gitDescribePatterns.value))
@@ -244,25 +243,38 @@ object SbtGit {
       val logger = streams.value.log
       val changedFiles = git.gitFilesChangedLastCommit.value
       val shouldCreateVersionTag = createVersionTag.value
+      val projName = name.value
       Def.task {
         val location = git.baseLocation.value
-        git.gitMergeFrom.value
-          .filter(_ => shouldCreateVersionTag)
-          .filter(_ => changedFiles.exists(_.startsWith(location)))
-          .flatMap {
-            case fixRegex(_) => nextPatchVersion.value
-            case featureRegex() => nextMinorVersion.value
-            case majorRegex() => nextMajorVersion.value
-            case _ => None
+        if(shouldCreateVersionTag) {
+          logger.info(s"$projName / shouldCreateVersionTag = true")
+          if(changedFiles.exists(_.startsWith(location))) {
+            logger.info(s"Found changed files starting with $projName / location ($location)")
+            val mergeFrom = git.gitMergeFrom.value
+            mergeFrom
+              .flatMap {
+                case fixRegex(_) => nextPatchVersion.value
+                case featureRegex() => nextMinorVersion.value
+                case majorRegex() => nextMajorVersion.value
+                case _ =>
+                  logger.info(s"Merge from mismatch: $mergeFrom")
+                  None
+              }
+              .map(newVersion => {
+                val tag = tagPrefix.value.map(prefix => s"$prefix-$newVersion").getOrElse(newVersion)
+                logger.info(s"New version for project $projName: $newVersion")
+                runner("tag", "-a", tag, "-m", s"$projName version $newVersion")(file("."), logger)
+                s"$projName = $newVersion"
+              })
+              .getOrElse("")
+          } else {
+            logger.info(s"No changed files starting with $projName / location ($location)")
+            ""
           }
-          .map(newVersion => {
-            val tag = tagPrefix.value.map(prefix => s"$prefix-$newVersion").getOrElse(newVersion)
-            val projName = name.value
-            logger.info(s"New version for project $projName: $newVersion")
-            runner("tag", "-a", tag, "-m", s"$projName version $newVersion")(file("."), logger)
-            s"$projName = $newVersion"
-          })
-          .getOrElse("")
+        } else {
+          logger.info(s"$projName / shouldCreateVersionTag = false")
+          ""
+        }
       }
     }.value
   )
