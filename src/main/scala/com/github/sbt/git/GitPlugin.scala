@@ -227,7 +227,7 @@ object SbtGit {
       val changedFiles = git.gitFilesChangedLastCommit.value
       val shouldCreateVersionTag = createVersionTag.value
       Def.task {
-        val location = baseLocation.value
+        val location = git.baseLocation.value
         git.gitMergeFrom.value
           .filter(_ => shouldCreateVersionTag)
           .filter(_ => changedFiles.exists(_.startsWith(location)))
