@@ -27,5 +27,6 @@ libraryDependencies ++= Seq(
   "org.scalameta" %% "munit" % "0.7.29" % Test
 )
 
+ThisBuild / versionScheme := Some("semver-spec")
 scriptedLaunchOpts += s"-Dproject.version=${version.value}"
-publishTo := Some("Artifactory Realm Releases" at "https://placer.jfrog.io/artifactory/placer-mvn-snapshot-local")
+publishTo := Some("Artifactory Realm Releases" at "https://placer.jfrog.io/artifactory/placer-mvn-release-local")
