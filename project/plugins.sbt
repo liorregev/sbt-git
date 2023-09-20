@@ -7,4 +7,4 @@ resolvers ++= Seq(
 )
 
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.5.10")
-addSbtPlugin("io.github.liorregev" % "sbt-vault" % "0.4.2")
+addSbtPlugin("io.github.liorregev" % "sbt-vault" % "0.5.0")
