@@ -228,9 +228,9 @@ object SbtGit {
       Def.task {
         val location = git.baseLocation.value
         if(shouldCreateVersionTag) {
-          logger.info(s"$projName / shouldCreateVersionTag = true")
+          logger.debug(s"$projName / shouldCreateVersionTag = true")
           if(changedFiles.exists(_.startsWith(location))) {
-            logger.info(s"Found changed files starting with $projName / location ($location)")
+            logger.debug(s"Found changed files starting with $projName / location ($location)")
             val mergeFrom = git.gitMergeFrom.value
             mergeFrom
               .flatMap {
@@ -238,22 +238,22 @@ object SbtGit {
                 case featureRegex() => nextMinorVersion.value
                 case majorRegex() => nextMajorVersion.value
                 case _ =>
-                  logger.info(s"Merge from mismatch: $mergeFrom")
+                  logger.debug(s"Merge from mismatch: $mergeFrom")
                   None
               }
               .map(newVersion => {
                 val tag = tagPrefix.value.map(prefix => s"$prefix-$newVersion").getOrElse(newVersion)
-                logger.info(s"New version for project $projName: $newVersion")
+                logger.debug(s"New version for project $projName: $newVersion")
                 runner("tag", "-a", tag, "-m", s"$projName version $newVersion")(file("."), logger)
                 s"$projName = $newVersion"
               })
               .getOrElse("")
           } else {
-            logger.info(s"No changed files starting with $projName / location ($location)")
+            logger.debug(s"No changed files starting with $projName / location ($location)")
             ""
           }
         } else {
-          logger.info(s"$projName / shouldCreateVersionTag = false")
+          logger.debug(s"$projName / shouldCreateVersionTag = false")
           ""
         }
       }
