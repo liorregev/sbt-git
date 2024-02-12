@@ -1,7 +1,5 @@
 package com.github.sbt.git
 
-import org.eclipse.jgit.lib.Repository
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import org.eclipse.jgit.api.Git as PGit
 import java.io.File
 import java.text.SimpleDateFormat
@@ -12,7 +10,6 @@ import org.eclipse.jgit.revwalk.{RevCommit, RevWalk}
 
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
-import scala.collection.JavaConverters.*
 
 // TODO - This class needs a bit more work, but at least it lets us use porcelain and wrap some higher-level
 // stuff on top of JGit, as needed for our plugin.
@@ -132,21 +129,33 @@ final class JGit(val repo: Repository) extends GitReadonlyInterface {
     }
   }
 
+  def changedFiles(source: RevCommit, current: RevCommit): Seq[String] = {
+    val os = new ByteArrayOutputStream()
+    val diffFormatter = new DiffFormatter(os)
+    diffFormatter.setRepository(repo)
+    diffFormatter.scan(source, current)
+      .asScala
+      .flatMap(entry => Set(entry.getOldPath, entry.getNewPath))
+      .filterNot(_.startsWith("/"))
+  }
+
   /** Files changed in current commit *   */
   override def changedFiles: Seq[String] = {
     val walk = new RevWalk(repo)
     val maybeChanges = for {
       head <- headCommit.map(walk.parseCommit)
       parent <- Try(head.getParent(0)).toOption
-    } yield {
-      val os = new ByteArrayOutputStream()
-      val diffFormatter = new DiffFormatter(os)
-      diffFormatter.setRepository(repo)
-      diffFormatter.scan(parent, head)
-        .asScala
-        .flatMap(entry => Set(entry.getOldPath, entry.getNewPath))
-        .filterNot(_.startsWith("/"))
-    }
+    } yield changedFiles(parent, head)
+    maybeChanges.getOrElse(Seq.empty)
+  }
+
+  /** Files changed since ref *   */
+  override def changedFilesSince(ref: String): Seq[String] = {
+    val walk = new RevWalk(repo)
+    val maybeChanges = for {
+      head <- headCommit.map(walk.parseCommit)
+      parent <- Try(walk.parseCommit(repo.resolve(ref))).toOption
+    } yield changedFiles(parent, head)
     maybeChanges.getOrElse(Seq.empty)
   }
 }

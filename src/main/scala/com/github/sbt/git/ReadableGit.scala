@@ -30,6 +30,8 @@ trait GitReadonlyInterface {
   def headCommitMessage: Option[String]
   /** Files changed in current commit **/
   def changedFiles: Seq[String]
+  /** Files changed since ref **/
+  def changedFilesSince(ref: String): Seq[String]
 }
 
 /** Our default readable git uses JGit instead of a process-forking and reading, for speed/safety. However, we allow
