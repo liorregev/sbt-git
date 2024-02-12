@@ -30,6 +30,8 @@ trait GitReadonlyInterface {
   def headCommitMessage: Option[String]
   /** Files changed in current commit **/
   def changedFiles: Seq[String]
+  /** Files changed since ref **/
+  def changedFilesSince(ref: String): Seq[String]
 }
 
 

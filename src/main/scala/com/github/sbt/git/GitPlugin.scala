@@ -23,7 +23,9 @@ object SbtGit {
     val gitUncommittedChanges = SettingKey[Boolean]("git-uncommitted-changes", "Whether there are uncommitted changes.")
     val gitMergeMessagePatterns = settingKey[Seq[String]]("Collection of regex patterns with one sub-group to parse commit messages of merge commits")
     val gitMergeFrom = SettingKey[Option[String]]("git-merge-from", "Possible name of a branch HEAD is a merge from")
+    val gitBaseBranch = SettingKey[Option[String]]("git-base-branch", "Name of the branch this branch is based on")
     val gitFilesChangedLastCommit = SettingKey[Seq[String]]("git-last-changes", "List of files changed in the last commit")
+    val gitFilesChangedSinceBase = SettingKey[Seq[String]]("git-changes-since", "List of files changed in the last commit")
     val versionRegex = settingKey[Regex]("Regex pattern for parsin versions, should have 3 subgroups for major, minor and patch")
     val nextPatchVersion = taskKey[Option[String]]("Returns the next patch version")
     val nextMinorVersion = taskKey[Option[String]]("Returns the next minor version")
@@ -128,6 +130,7 @@ object SbtGit {
     useConsoleForROGit := false,
     gitReader := new DefaultReadableGit(baseDirectory.value, if (useConsoleForROGit.value) Some(new ConsoleGitReadableOnly(ConsoleGitRunner, file("."), sLog.value)) else None),
     gitRunner := ConsoleGitRunner,
+    gitBaseBranch := None,
     gitHeadCommit := gitReader.value.withGit(_.headCommitSha),
     gitHeadMessage := gitReader.value.withGit(_.headCommitMessage),
     gitHeadCommitDate := gitReader.value.withGit(_.headCommitDate),
@@ -137,6 +140,7 @@ object SbtGit {
     ThisBuild / gitUncommittedChanges := gitReader.value.withGit(_.hasUncommittedChanges),
     gitMergeMessagePatterns := Seq.empty[String],
     gitFilesChangedLastCommit := gitReader.value.withGit(_.changedFiles),
+    gitFilesChangedSinceBase := gitReader.value.withGit(git => gitBaseBranch.value.map(git.changedFilesSince).getOrElse(Nil)),
     gitMergeFrom := {
       for {
         headMessage <- gitHeadMessage.value.map(_.trim)
@@ -351,7 +355,9 @@ object SbtGit {
     val baseVersion = ThisBuild / GitKeys.baseVersion
     val versionProperty = ThisBuild / GitKeys.versionProperty
     val gitUncommittedChanges = ThisBuild / GitKeys.gitUncommittedChanges
+    val gitBaseBranch = ThisBuild / GitKeys.gitBaseBranch
     val gitFilesChangedLastCommit = ThisBuild / GitKeys.gitFilesChangedLastCommit
+    val gitFilesChangedSinceBase = ThisBuild / GitKeys.gitFilesChangedSinceBase
     val gitMergeFrom = ThisBuild / GitKeys.gitMergeFrom
     val gitMergeMessagePatterns = ThisBuild / GitKeys.gitMergeMessagePatterns
     val uncommittedSignifier = ThisBuild / GitKeys.uncommittedSignifier

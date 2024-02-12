@@ -1,19 +1,16 @@
 package com.github.sbt.git
 
-import org.eclipse.jgit.lib.Repository
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import org.eclipse.jgit.api.Git as PGit
 import org.eclipse.jgit.diff.DiffFormatter
+import org.eclipse.jgit.lib.{ObjectId, Ref, Repository}
+import org.eclipse.jgit.revwalk.{RevCommit, RevWalk}
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 
 import java.io.{ByteArrayOutputStream, File}
 import java.text.SimpleDateFormat
 import java.util.Date
-import org.eclipse.jgit.lib.ObjectId
-import org.eclipse.jgit.lib.Ref
-import org.eclipse.jgit.revwalk.{RevCommit, RevWalk}
-
-import scala.util.Try
 import scala.collection.JavaConverters.*
+import scala.util.Try
 
 
 // TODO - This class needs a bit more work, but at least it lets us use porcelain and wrap some higher-level
@@ -59,7 +56,6 @@ final class JGit(val repo: Repository) extends GitReadonlyInterface {
     headCommit map (_.name)
 
   def currentTags: Seq[String] = {
-    import collection.JavaConverters._
     for {
       hash <- headCommit.map(_.name).toSeq
       unpeeledTag <- tags
@@ -124,21 +120,33 @@ final class JGit(val repo: Repository) extends GitReadonlyInterface {
     }
   }
 
+  def changedFiles(source: RevCommit, current: RevCommit): Seq[String] = {
+    val os = new ByteArrayOutputStream()
+    val diffFormatter = new DiffFormatter(os)
+    diffFormatter.setRepository(repo)
+    diffFormatter.scan(source, current)
+      .asScala
+      .flatMap(entry => Set(entry.getOldPath, entry.getNewPath))
+      .filterNot(_.startsWith("/"))
+  }
+
   /** Files changed in current commit *   */
   override def changedFiles: Seq[String] = {
     val walk = new RevWalk(repo)
     val maybeChanges = for {
       head <- headCommit.map(walk.parseCommit)
       parent <- Try(head.getParent(0)).toOption
-    } yield {
-      val os = new ByteArrayOutputStream()
-      val diffFormatter = new DiffFormatter(os)
-      diffFormatter.setRepository(repo)
-      diffFormatter.scan(parent, head)
-        .asScala
-        .flatMap(entry => Set(entry.getOldPath, entry.getNewPath))
-        .filterNot(_.startsWith("/"))
-    }
+    } yield changedFiles(parent, head)
+    maybeChanges.getOrElse(Seq.empty)
+  }
+
+  /** Files changed since ref *   */
+  override def changedFilesSince(ref: String): Seq[String] = {
+    val walk = new RevWalk(repo)
+    val maybeChanges = for {
+      head <- headCommit.map(walk.parseCommit)
+      parent <- Try(walk.parseCommit(repo.resolve(ref))).toOption
+    } yield changedFiles(parent, head)
     maybeChanges.getOrElse(Seq.empty)
   }
 }

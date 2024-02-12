@@ -29,4 +29,5 @@ libraryDependencies ++= Seq(
 
 ThisBuild / versionScheme := Some("semver-spec")
 scriptedLaunchOpts += s"-Dproject.version=${version.value}"
+scriptedBufferLog := false
 publishTo := Some("Artifactory Realm Releases" at "https://placer.jfrog.io/artifactory/placer-mvn-release-local")
