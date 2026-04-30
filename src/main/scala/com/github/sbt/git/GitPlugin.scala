@@ -142,6 +142,7 @@ object SbtGit {
     gitHeadCommit := gitReader.value.withGit(_.headCommitSha),
     gitHeadMessage := gitReader.value.withGit(_.headCommitMessage),
     gitHeadCommitDate := gitReader.value.withGit(_.headCommitDate),
+    gitTagToVersionNumber := git.defaultTagByVersionStrategy,
     gitDescribePatterns := Seq.empty[String],
     gitDescribedVersion := gitReader.value
       .withGit(_.describedVersion(git.gitDescribePatterns.value))
@@ -209,7 +210,7 @@ object SbtGit {
       if (projectPatterns == buildPatterns && projectTagToVersionNumber == buildTagToVersionNumber)
         (ThisBuild / gitDescribedVersion).value
       else gitReader.value.withGit(_.describedVersion(projectPatterns)).map(v => projectTagToVersionNumber(v).getOrElse(v))
-    }
+    },
     versionRegex := raw"^(\d+)\.(\d+)\.(\d+)-\d+-g[a-f\d]+(-SNAPSHOT)?".r,
     nextPatchVersion := {
       val regex = git.versionRegex.value

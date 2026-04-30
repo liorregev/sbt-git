@@ -1,12 +1,14 @@
 package com.github.sbt.git
 
 import org.eclipse.jgit.api.Git as PGit
-import java.io.File
+import org.eclipse.jgit.diff.DiffFormatter
+
+import java.io.{ByteArrayOutputStream, File}
 import java.text.SimpleDateFormat
 import java.util.Date
-import org.eclipse.jgit.lib.ObjectId
-import org.eclipse.jgit.lib.Ref
+import org.eclipse.jgit.lib.{ObjectId, Ref, Repository}
 import org.eclipse.jgit.revwalk.{RevCommit, RevWalk}
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
