@@ -32,7 +32,7 @@ class ConsoleGitReadableOnly(git: GitRunner, cwd: File, log: Logger) extends Git
 
   private def changedFilesBySpec(spec: String): Option[Seq[String]] = {
     Try {
-      git("diff-tree", "--no-commit-id", "--name-only", "-r", spec)(cwd, log)
+      git("diff-tree", "-m", "--no-commit-id", "--name-only", "-r", spec)(cwd, log)
     }
       .toOption
       .map(_.split('\n').map(_.trim).toSeq)
